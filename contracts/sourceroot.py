@@ -397,6 +397,25 @@ def parse_json_object(raw: typing.Any) -> dict:
     return parsed
 
 
+def page_text(page: typing.Any) -> str:
+    """Normalize GenVM rendered-page responses across supported SDK shapes."""
+    if hasattr(page, "calldata"):
+        page = page.calldata
+    if isinstance(page, bytes):
+        return page.decode("utf-8", errors="replace")
+    if isinstance(page, str):
+        return page
+    if isinstance(page, dict):
+        value = page.get("text", page.get("body", ""))
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace")
+        return str(value)
+    value = getattr(page, "text", None)
+    if value is not None:
+        return str(value)
+    return str(page)
+
+
 def scope_definitions(entity: typing.Any, mask: int) -> list[dict]:
     result: list[dict] = []
     index = 0
@@ -496,8 +515,8 @@ def inspect_authority_once(
     try:
         anchor_page = gl.nondet.web.render(anchor_url, mode="text")
         source_page = gl.nondet.web.render(source_url, mode="text")
-        anchor_text = str(anchor_page)[:MAX_PAGE_CHARS]
-        source_text = str(source_page)[:MAX_PAGE_CHARS]
+        anchor_text = page_text(anchor_page)[:MAX_PAGE_CHARS]
+        source_text = page_text(source_page)[:MAX_PAGE_CHARS]
     except Exception:
         result = {
             "verdict": VERDICT_UNAVAILABLE,

@@ -23,8 +23,9 @@ T3 = "2026-08-31T14:03:00+00:00"
 
 ANCHOR_TEXT = (
     "ACME Authority Directory. The official service status source for ACME is "
-    "https://status.example.com/status. It is authorised for service status, "
-    "security notices, and legal notices."
+    "https://status.example.com/status, covering operational status and outage "
+    "notices, security advisories and incident disclosures, and legal notices and "
+    "formal policy notices."
 )
 ROOT_TEXT = (
     "ACME Service Status. For security advisories, ACME delegates authority to "

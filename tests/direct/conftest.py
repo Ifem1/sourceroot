@@ -193,7 +193,23 @@ def _enable_pickling_validation(direct_vm):
 
         gl = sys.modules.get("genlayer.gl")
         if gl is not None and isinstance(getattr(gl, "message_raw", None), dict):
+            from genlayer.py.types import Address
+
+            sender = direct_vm.sender
+            if isinstance(sender, bytes):
+                sender = Address(sender)
+            gl.message_raw["sender_address"] = sender
+            gl.message_raw["origin_address"] = sender
             gl.message_raw["datetime"] = direct_vm._datetime
+            message_type = getattr(gl, "MessageType", None)
+            if message_type is not None:
+                gl.message = message_type(
+                    contract_address=gl.message_raw["contract_address"],
+                    sender_address=sender,
+                    origin_address=sender,
+                    value=gl.message_raw["value"],
+                    chain_id=gl.message_raw["chain_id"],
+                )
 
     direct_vm._refresh_gl_message = refresh_with_datetime
     direct_vm._refresh_gl_message()
