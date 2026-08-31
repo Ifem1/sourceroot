@@ -1,0 +1,3 @@
+SourceRoot Demo Authority — authorised service-status mirror
+
+This controlled fixture is the authorised mirror of the official status source for the SERVICE_STATUS demo scope.

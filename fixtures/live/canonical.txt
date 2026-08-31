@@ -1,0 +1,7 @@
+SourceRoot Demo Authority — canonical authority directory
+
+The official operational status source for SourceRoot Demo Authority is:
+https://raw.githubusercontent.com/Ifem1/sourceroot/main/fixtures/live/status.txt
+
+That source is authorised for SERVICE_STATUS, SECURITY, and LEGAL_NOTICES demo scopes.
+This document is a controlled public fixture for demonstrating SourceRoot's authority-lineage protocol.

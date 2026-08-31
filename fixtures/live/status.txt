@@ -1,0 +1,9 @@
+SourceRoot Demo Authority — official status source
+
+This source publishes SERVICE_STATUS notices for the controlled SourceRoot demonstration.
+
+For SECURITY advisories, this source explicitly delegates authority to:
+https://raw.githubusercontent.com/Ifem1/sourceroot/main/fixtures/live/security.txt
+
+The authorised mirror for SERVICE_STATUS is:
+https://raw.githubusercontent.com/Ifem1/sourceroot/main/fixtures/live/mirror.txt

@@ -1,0 +1,6 @@
+SourceRoot Demo Authority — revocation fixture
+
+Authority previously associated with the following source is explicitly revoked:
+https://raw.githubusercontent.com/Ifem1/sourceroot/main/fixtures/live/status.txt
+
+This is an immutable controlled fixture for testing SourceRoot's explicit revocation semantics.

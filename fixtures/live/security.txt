@@ -1,0 +1,3 @@
+SourceRoot Demo Authority — delegated security advisory source
+
+This controlled fixture is the delegated source for SECURITY advisories in the SourceRoot StudioNet proof.
