@@ -91,7 +91,7 @@ Expected final gates:
 - `genvm-lint check contracts/sourceroot.py`
 - `genvm-lint check examples/authoritative_notice_gate.py`
 
-Current source pack contains 30 direct-mode scenarios plus static invariants. The final live deployment/transaction fields are deliberately blank until executed; no deployment evidence is fabricated.
+Current source pack contains 34 direct-mode scenarios plus static invariants. The live deployment and composability evidence is recorded in `docs/DEPLOYMENT.md`.
 
 ## Reviewer-focused differentiators
 
@@ -117,13 +117,13 @@ Not yet deployed.
 
 Populate only after final source commit is frozen:
 
-- Source commit: `TBD`
-- Source code Keccak/SHA-256 external release checksum: `TBD`
-- StudioNet address: `TBD`
-- Deployment transaction: `TBD`
-- Root-resolution transaction: `TBD`
-- Child-resolution transaction: `TBD`
-- Consumer deployment: `TBD`
-- Successful consumer transaction: `TBD`
-- Parent revocation/revalidation transaction: `TBD`
-- Expected consumer rejection proof: `TBD`
+- Source commit: `ca8a511bf946ca4c226a891660a06d77b36ecd14`
+- Source code SHA-256 external release checksum: `6133FCB34B43FCCD2032E9C7CCA964C4A5055A0B676059EF581E23C32FDCF8A7`
+- StudioNet address: `0x6eBE7042EbD129EAB6E4972e6716F3C973F9b286`
+- Deployment transaction: recorded in the CLI deployment receipt; hash was not retained by the command output capture
+- Root-resolution transaction: `0x135a7d6daa3f591286efafac1a05adaa7b74a35059f896201c81cb3e3b6571c8`
+- Child-resolution transaction: `0x09676233e759e0b8e2b1dfd0c696d0c5c587372f04d27b78560e1b1d7619bbce`
+- Consumer deployment: `0xc472ab3670702948eb96446fa21cd3b9c9d819b43c6174f21d7bfa70a732498f`
+- Successful consumer transaction: `0xac71d5171af45e5e1e23c2a46e2bde93b18d0e07de4813ee86e2246aabb307aa`
+- Parent revocation/revalidation transaction: `0x515411954730eab20bf3b73b6789d40effa3e17f96e6166403b7adb544c7b810`
+- Expected consumer rejection proof: `0x40ed8a3d575cbe0d36468ccf3ab300d57b39aefea835aa87376d978556c73422`

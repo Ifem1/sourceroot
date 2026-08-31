@@ -245,7 +245,7 @@ See `docs/THREAT_MODEL.md` for the complete threat analysis.
 
 The repository includes:
 
-- 30 direct-mode protocol/adversarial scenarios;
+- 34 direct-mode protocol/adversarial scenarios;
 - dependency-free static invariants;
 - pickling validation in Direct Mode;
 - a reviewer-facing preflight script;
