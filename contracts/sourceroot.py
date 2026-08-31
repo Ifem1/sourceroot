@@ -714,8 +714,8 @@ class SourceRoot(gl.Contract):
                 u256(0),
                 u256(0),
                 u256(0),
-                gl.storage.inmem_allocate(DynArray[str], []),
-                gl.storage.inmem_allocate(DynArray[str], []),
+                gl.storage.inmem_allocate(DynArray[str], ()),
+                gl.storage.inmem_allocate(DynArray[str], ()),
                 "",
             )
         )
