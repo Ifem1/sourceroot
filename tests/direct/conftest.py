@@ -119,10 +119,16 @@ def _patch_message_injection():
             # Import only after fd 0 contains the encoded message. The v0.3
             # GenVM globals decode stdin during import.
             import genlayer.gl.genvm_contracts as genvm_contracts
+            import genlayer
+            from genlayer.py import calldata as sdk_calldata
+            from genlayer.py import types as sdk_types
 
             # The pinned runner keeps its module-level single-contract
             # sentinel between loader invocations, unlike the older runner.
             genvm_contracts.__known_contract__ = None
+            # v0.3's internal call decoder still imports these legacy aliases.
+            genlayer.calldata = sdk_calldata
+            genlayer.types = sdk_types
 
             # The v0.3 runner cannot import its legacy ``genlayer.vm`` alias
             # while applying the direct-mode run_nondet patch. Install the
