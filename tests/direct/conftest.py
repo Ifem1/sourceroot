@@ -19,8 +19,19 @@ def _patch_windows_message_injection():
 
     try:
         from gltest.direct import loader
+        from gltest.direct import sdk_compat
     except ImportError:
         return
+
+    # The pinned v0.3 suite's compatibility helper expects a top-level
+    # ``genlayer.types`` module, while this SDK artifact exposes it under
+    # ``genlayer.py.types``.
+    def import_types_compat():
+        from genlayer.py import types as sdk_types
+
+        return sdk_types
+
+    sdk_compat.import_types = import_types_compat
 
     def inject_message_to_fd0(vm):
         from genlayer.py import calldata
@@ -45,6 +56,39 @@ def _patch_windows_message_injection():
 
             allocate._sourceroot_windows_patch = True
             storage.inmem_allocate = allocate
+
+        if not getattr(loader._allocate_contract, "_sourceroot_v03_patch", False):
+            original_allocate_contract = loader._allocate_contract
+
+            def allocate_contract(contract_cls, vm, *args, **kwargs):
+                # The pinned testing-suite commit imports genlayer.storage,
+                # while the v0.3 runner exposes this module as
+                # genlayer.py.storage. Use the same descriptor-backed
+                # allocation path with the VM's actual storage manager.
+                try:
+                    from genlayer.py.storage._internal.generate import (
+                        ORIGINAL_INIT_ATTR,
+                        _storage_build,
+                    )
+
+                    td = _storage_build(contract_cls, {})
+                    slot = vm._storage.get_store_slot(storage.ROOT_SLOT_ID)
+                    instance = td.get(slot, 0)
+                    init = getattr(td, "cls", None)
+                    if init is None:
+                        init = getattr(contract_cls, "__init__", None)
+                    else:
+                        init = getattr(init, "__init__", None)
+                    if init is not None:
+                        if hasattr(init, ORIGINAL_INIT_ATTR):
+                            init = getattr(init, ORIGINAL_INIT_ATTR)
+                        init(instance, *args, **kwargs)
+                    return instance
+                except ImportError:
+                    return original_allocate_contract(contract_cls, vm, *args, **kwargs)
+
+            allocate_contract._sourceroot_v03_patch = True
+            loader._allocate_contract = allocate_contract
 
         sender_addr = vm.sender
         if isinstance(sender_addr, bytes):
@@ -75,6 +119,50 @@ def _patch_windows_message_injection():
             os.lseek(fd, 0, os.SEEK_SET)
             vm._original_stdin_fd = os.dup(0)
             os.dup2(fd, 0)
+            # Import only after fd 0 contains the encoded message. The v0.3
+            # GenVM globals decode stdin during import.
+            import genlayer.gl.genvm_contracts as genvm_contracts
+
+            # The pinned runner keeps its module-level single-contract
+            # sentinel between loader invocations, unlike the older runner.
+            genvm_contracts.__known_contract__ = None
+
+            # The v0.3 runner cannot import its legacy ``genlayer.vm`` alias
+            # while applying the direct-mode run_nondet patch. Install the
+            # equivalent patch once the SDK module is available.
+            try:
+                import genlayer.gl.vm as gl_vm
+                from genlayer.py.types import Lazy
+
+                sys.modules.setdefault("genlayer.vm", gl_vm)
+
+                def direct_run_nondet(leader_fn, validator_fn, /, **kwargs):
+                    from gltest.direct import wasi_mock
+
+                    active_vm = wasi_mock.get_vm()
+                    if active_vm._check_pickling:
+                        loader._validate_pickling(leader_fn, "leader_fn")
+                        loader._validate_pickling(validator_fn, "validator_fn")
+                    active_vm._in_nondet = True
+                    try:
+                        result = leader_fn()
+                    finally:
+                        active_vm._in_nondet = False
+                    active_vm._captured_validators.append(
+                        (result, leader_fn, validator_fn)
+                    )
+                    return result
+
+                def lazy_direct_run_nondet(leader_fn, validator_fn, /, **kwargs):
+                    return Lazy(
+                        lambda: direct_run_nondet(leader_fn, validator_fn, **kwargs)
+                    )
+
+                direct_run_nondet.lazy = lazy_direct_run_nondet
+                gl_vm.run_nondet = direct_run_nondet
+            except ImportError:
+                pass
+
         finally:
             os.close(fd)
             # fd 0 owns the file on Windows; defer cleanup to the OS.

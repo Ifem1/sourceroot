@@ -377,6 +377,8 @@ def is_subset_mask(child: int, parent: int) -> bool:
 
 
 def parse_json_object(raw: typing.Any) -> dict:
+    if hasattr(raw, "calldata"):
+        raw = raw.calldata
     if isinstance(raw, dict):
         return raw
     if not isinstance(raw, str):
@@ -395,19 +397,32 @@ def parse_json_object(raw: typing.Any) -> dict:
     return parsed
 
 
+def scope_definitions(entity: typing.Any, mask: int) -> list[dict]:
+    result: list[dict] = []
+    index = 0
+    for name in entity.scope_names:
+        if int(mask) & (1 << index):
+            result.append(
+                {
+                    "name": str(name),
+                    "description": str(entity.scope_descriptions[index]),
+                }
+            )
+        index += 1
+    return result
+
+
 def scope_labels(names: typing.Iterable[str], mask: int) -> list[str]:
     result: list[str] = []
-    index = 0
-    for name in names:
+    for index, name in enumerate(names):
         if int(mask) & (1 << index):
             result.append(str(name))
-        index += 1
     return result
 
 
 def relation_prompt(
     entity_name: str,
-    scope_names: list[str],
+    scope_definitions_value: list[dict],
     relation: int,
     mode: int,
     anchor_url: str,
@@ -434,8 +449,8 @@ ENTITY_JSON
 REQUESTED_RELATION
 {relation_name(relation)}
 
-REQUESTED_SCOPES_JSON
-{json.dumps(scope_names, ensure_ascii=True)}
+REQUESTED_SCOPE_DEFINITIONS_JSON
+{json.dumps(scope_definitions_value, sort_keys=True, ensure_ascii=True)}
 
 ANCHOR_URL_JSON
 {json.dumps(anchor_url, ensure_ascii=True)}
@@ -471,7 +486,7 @@ SOURCE_TEXT
 
 def inspect_authority_once(
     entity_name: str,
-    scope_names_value: list[str],
+    scope_definitions_value: list[dict],
     relation: int,
     mode: int,
     anchor_url: str,
@@ -511,7 +526,7 @@ def inspect_authority_once(
         raw = gl.nondet.exec_prompt(
             relation_prompt(
                 entity_name,
-                scope_names_value,
+                scope_definitions_value,
                 relation,
                 mode,
                 anchor_url,
@@ -565,7 +580,50 @@ def inspect_authority_once(
     return result
 
 
-def validate_leader_result(leader_result: typing.Any, own: dict, mode: int) -> bool:
+def _evidence_has_scope_definition(evidence: str, definition: dict) -> bool:
+    lowered = evidence.lower().replace("_", " ")
+    name_tokens = [token for token in str(definition.get("name", "")).lower().replace("_", " ").split() if len(token) >= 4]
+    description_tokens = [token for token in str(definition.get("description", "")).lower().split() if len(token) >= 6]
+    return any(token in lowered for token in name_tokens) and any(
+        token in lowered for token in description_tokens
+    )
+
+
+def _evidence_materially_supports(
+    evidence: str,
+    verdict: int,
+    relation: int,
+    source_url: str,
+    scope_definitions_value: list[dict],
+) -> bool:
+    lowered = evidence.lower()
+    if source_url.lower() not in lowered:
+        return False
+    if relation == REL_ROOT:
+        relation_terms = ("official", "authorized", "authorised")
+    elif relation == REL_DELEGATED_FOR:
+        relation_terms = ("delegate", "delegated", "delegates")
+    elif relation == REL_MIRROR_OF:
+        relation_terms = ("mirror", "mirrored")
+    else:
+        relation_terms = ("official", "authorized", "authorised")
+    if not any(term in lowered for term in relation_terms):
+        return False
+    if verdict in (VERDICT_REVOKED, VERDICT_SUPERSEDED):
+        state_terms = ("revoke", "revoked", "withdraw", "supersed", "replaced")
+        if not any(term in lowered for term in state_terms):
+            return False
+    return all(_evidence_has_scope_definition(evidence, definition) for definition in scope_definitions_value)
+
+
+def validate_leader_result(
+    leader_result: typing.Any,
+    own: dict,
+    mode: int,
+    relation: int,
+    source_url: str,
+    scope_definitions_value: list[dict],
+) -> bool:
     if not isinstance(leader_result, gl.vm.Return):
         return False
     leader = leader_result.calldata
@@ -598,6 +656,14 @@ def validate_leader_result(leader_result: typing.Any, own: dict, mode: int) -> b
         if anchor_evidence not in clean_text(own_anchor_text, MAX_PAGE_CHARS):
             return False
         if source_evidence != "" and source_evidence not in clean_text(own_source_text, MAX_PAGE_CHARS):
+            return False
+        if not _evidence_materially_supports(
+            anchor_evidence,
+            leader_verdict,
+            relation,
+            source_url,
+            scope_definitions_value,
+        ):
             return False
     elif anchor_evidence != "" or source_evidence != "":
         return False
@@ -775,7 +841,7 @@ class SourceRoot(gl.Contract):
 
     def _authority_consensus(self, source: SourceNode, entity: Entity, mode: int) -> dict:
         entity_name = str(entity.name)
-        selected_scopes = self._scope_names_for(entity, int(source.scope_mask))
+        selected_scopes = scope_definitions(entity, int(source.scope_mask))
         relation = int(source.relation)
         anchor_url = self._anchor_for(source, entity)
         source_url = str(source.url)
@@ -802,11 +868,18 @@ class SourceRoot(gl.Contract):
                     source_url,
                     True,
                 )
-                return validate_leader_result(leader_result, own, int(mode))
+                return validate_leader_result(
+                    leader_result,
+                    own,
+                    int(mode),
+                    relation,
+                    source_url,
+                    selected_scopes,
+                )
             except Exception:
                 return False
 
-        return gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+        return gl.vm.run_nondet(leader_fn, validator_fn)
 
     def _append_review(self, source_id: int, source: SourceNode, result: dict, observed_at: int) -> int:
         verdict = int(result.get("verdict", VERDICT_AMBIGUOUS))
@@ -936,7 +1009,12 @@ class SourceRoot(gl.Contract):
             raise gl.vm.UserError(f"{ERR_EXPECTED}: entity must be sealed before proposing root")
         if int(entity.root_source_id) != 0:
             existing_root = self._source(int(entity.root_source_id))
-            if int(existing_root.lifecycle_status) not in (SOURCE_REJECTED, SOURCE_CANCELLED):
+            if int(existing_root.lifecycle_status) not in (
+                SOURCE_REJECTED,
+                SOURCE_CANCELLED,
+                SOURCE_REVOKED,
+                SOURCE_SUPERSEDED,
+            ):
                 raise gl.vm.UserError(f"{ERR_EXPECTED}: root source already proposed")
         return self._propose_source(
             entity,
@@ -1135,8 +1213,12 @@ class SourceRoot(gl.Contract):
 
         if verdict == VERDICT_REVOKED:
             source.lifecycle_status = u8(SOURCE_REVOKED)
+            if int(source.parent_source_id) == 0:
+                entity.status = u8(ENTITY_SEALED)
         elif verdict == VERDICT_SUPERSEDED:
             source.lifecycle_status = u8(SOURCE_SUPERSEDED)
+            if int(source.parent_source_id) == 0:
+                entity.status = u8(ENTITY_SEALED)
         elif verdict in (VERDICT_AMBIGUOUS, VERDICT_UNAVAILABLE):
             # Fail closed without destroying history: a later CONFIRMED review can recover.
             source.lifecycle_status = u8(SOURCE_ACTIVE)
