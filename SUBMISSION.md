@@ -113,9 +113,9 @@ Any web-enabled GenLayer contract can consume SourceRoot before trusting evidenc
 
 ## Canonical deployment
 
-Not yet deployed.
+Deployed on StudioNet with live cross-contract proof completed.
 
-Populate only after final source commit is frozen:
+Canonical deployment evidence:
 
 - Source commit: `ca8a511bf946ca4c226a891660a06d77b36ecd14`
 - Source code SHA-256 external release checksum: `6133FCB34B43FCCD2032E9C7CCA964C4A5055A0B676059EF581E23C32FDCF8A7`
