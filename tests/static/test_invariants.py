@@ -83,6 +83,14 @@ def test_review_history_is_persistent():
     assert "get_review" in text
 
 
+def test_entity_storage_uses_recursive_default_initialization():
+    text = source()
+    assert "entities: TreeMap[u256, Entity]" in text
+    assert "next_entity_id: u256" in text
+    assert "get_or_insert_default(entity_id)" in text
+    assert "inmem_allocate(DynArray" not in text
+
+
 def test_cross_contract_interface_and_consumer_exist():
     contract = source()
     consumer = CONSUMER.read_text(encoding="utf-8")

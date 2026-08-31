@@ -389,14 +389,12 @@ def test_explicit_revocation_is_terminal_and_invalidates_descendants(direct_vm, 
     assert contract.is_authoritative(entity_id, child_id, SECURITY, entity_hash, "") is True
 
     revoked_anchor = (
-        "ACME Authority Directory. Authority for https://status.example.com/status is explicitly revoked "
-        "for official operational status and outage notices, security advisories and incident disclosures, "
-        "and legal notices and formal policy notices effective now."
+        "Authority for https://status.example.com/status is revoked for SERVICE_STATUS, SECURITY, and "
+        "LEGAL_NOTICES effective now."
     )
     evidence = (
-        "Authority for https://status.example.com/status is explicitly revoked for official operational status "
-        "and outage notices, security advisories and incident disclosures, and legal notices and formal policy "
-        "notices effective now."
+        "Authority for https://status.example.com/status is revoked for SERVICE_STATUS, SECURITY, and LEGAL_NOTICES "
+        "effective now."
     )
     direct_vm.clear_mocks()
     mock_pair(direct_vm, ANCHOR, revoked_anchor, ROOT_URL, ROOT_TEXT, "REVOKED", evidence)
@@ -412,14 +410,10 @@ def test_explicit_revocation_is_terminal_and_invalidates_descendants(direct_vm, 
 def test_explicit_supersession_is_terminal(direct_vm, direct_deploy):
     contract, _, root_id, _ = activate_root(direct_vm, direct_deploy)
     superseded_anchor = (
-        "ACME Authority Directory. https://status.example.com/status has been superseded by the new ACME status "
-        "registry for official operational status and outage notices, security advisories and incident disclosures, "
-        "and legal notices and formal policy notices."
+        "https://status.example.com/status has been replaced for SERVICE_STATUS, SECURITY, and LEGAL_NOTICES."
     )
     evidence = (
-        "https://status.example.com/status has been superseded by the new ACME status registry for official "
-        "operational status and outage notices, security advisories and incident disclosures, and legal notices and "
-        "formal policy notices."
+        "https://status.example.com/status has been replaced for SERVICE_STATUS, SECURITY, and LEGAL_NOTICES."
     )
     direct_vm.clear_mocks()
     mock_pair(direct_vm, ANCHOR, superseded_anchor, ROOT_URL, ROOT_TEXT, "SUPERSEDED", evidence)
@@ -437,14 +431,10 @@ def test_terminal_root_can_be_replaced_without_reviving_old_lineage(direct_vm, d
     old_certificate = contract.get_source(root_a)["certificate_hash"]
 
     superseded_anchor = (
-        "ACME Authority Directory. https://status.example.com/status has been superseded by the new ACME status "
-        "registry for official operational status and outage notices, security advisories and incident disclosures, "
-        "and legal notices and formal policy notices."
+        "https://status.example.com/status has been replaced for SERVICE_STATUS, SECURITY, and LEGAL_NOTICES."
     )
     superseded_evidence = (
-        "https://status.example.com/status has been superseded by the new ACME status registry for official "
-        "operational status and outage notices, security advisories and incident disclosures, and legal notices and "
-        "formal policy notices."
+        "https://status.example.com/status has been replaced for SERVICE_STATUS, SECURITY, and LEGAL_NOTICES."
     )
     direct_vm.clear_mocks()
     mock_pair(direct_vm, ANCHOR, superseded_anchor, ROOT_URL, ROOT_TEXT, "SUPERSEDED", superseded_evidence)

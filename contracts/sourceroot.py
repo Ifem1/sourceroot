@@ -599,12 +599,16 @@ def inspect_authority_once(
     return result
 
 
-def _evidence_has_scope_definition(evidence: str, definition: dict) -> bool:
+def _evidence_has_scope_definition(evidence: str, definition: dict, terminal: bool = False) -> bool:
     lowered = evidence.lower().replace("_", " ")
     name_tokens = [token for token in str(definition.get("name", "")).lower().replace("_", " ").split() if len(token) >= 3]
     description_tokens = [token for token in str(definition.get("description", "")).lower().split() if len(token) >= 3]
     if not name_tokens or not description_tokens:
         return False
+    if terminal:
+        return any(token in lowered for token in name_tokens) or any(
+            token in lowered for token in description_tokens
+        )
     return any(token in lowered for token in name_tokens) and any(
         token in lowered for token in description_tokens
     )
@@ -620,21 +624,30 @@ def _evidence_materially_supports(
     lowered = evidence.lower()
     if source_url.lower() not in lowered:
         return False
-    if relation == REL_ROOT:
-        relation_terms = ("official", "authorized", "authorised")
-    elif relation == REL_DELEGATED_FOR:
-        relation_terms = ("delegate", "delegated", "delegates")
-    elif relation == REL_MIRROR_OF:
-        relation_terms = ("mirror", "mirrored")
-    else:
-        relation_terms = ("official", "authorized", "authorised")
-    if not any(term in lowered for term in relation_terms):
-        return False
-    if verdict in (VERDICT_REVOKED, VERDICT_SUPERSEDED):
-        state_terms = ("revoke", "revoked", "withdraw", "supersed", "replaced")
+    terminal = verdict in (VERDICT_REVOKED, VERDICT_SUPERSEDED)
+    if not terminal:
+        if relation == REL_ROOT:
+            relation_terms = ("official", "authorized", "authorised")
+        elif relation == REL_DELEGATED_FOR:
+            relation_terms = ("delegate", "delegated", "delegates")
+        elif relation == REL_MIRROR_OF:
+            relation_terms = ("mirror", "mirrored")
+        else:
+            relation_terms = ("official", "authorized", "authorised")
+        if not any(term in lowered for term in relation_terms):
+            return False
+    if verdict == VERDICT_REVOKED:
+        state_terms = ("revoke", "revoked", "withdraw", "withdrawn")
         if not any(term in lowered for term in state_terms):
             return False
-    return all(_evidence_has_scope_definition(evidence, definition) for definition in scope_definitions_value)
+    if verdict == VERDICT_SUPERSEDED:
+        state_terms = ("supersed", "replaced", "replace")
+        if not any(term in lowered for term in state_terms):
+            return False
+    return all(
+        _evidence_has_scope_definition(evidence, definition, terminal=terminal)
+        for definition in scope_definitions_value
+    )
 
 
 def validate_leader_result(
@@ -697,28 +710,14 @@ def validate_leader_result(
 # ---------------------------------------------------------------------------
 
 class SourceRoot(gl.Contract):
-    entities: DynArray[Entity]
+    entities: TreeMap[u256, Entity]
+    next_entity_id: u256
     sources: DynArray[SourceNode]
     reviews: DynArray[ReviewReceipt]
     source_ids_by_key: TreeMap[str, u256]
 
     def __init__(self):
-        # Sentinel records keep 0 as a clean "not found / no parent" value.
-        self.entities.append(
-            Entity(
-                Address("0x0000000000000000000000000000000000000000"),
-                "",
-                "",
-                u8(ENTITY_CANCELLED),
-                u256(0),
-                u256(0),
-                u256(0),
-                u256(0),
-                gl.storage.inmem_allocate(DynArray[str], str),
-                gl.storage.inmem_allocate(DynArray[str], str),
-                "",
-            )
-        )
+        self.next_entity_id = u256(1)
         self.sources.append(
             SourceNode(
                 u256(0),
@@ -760,9 +759,12 @@ class SourceRoot(gl.Contract):
     # ------------------------------------------------------------------
 
     def _entity(self, entity_id: int) -> Entity:
-        if int(entity_id) <= 0 or int(entity_id) >= len(self.entities):
+        if int(entity_id) <= 0:
             raise gl.vm.UserError(f"{ERR_EXPECTED}: entity does not exist")
-        return self.entities[int(entity_id)]
+        entity = self.entities.get(u256(entity_id))
+        if entity is None:
+            raise gl.vm.UserError(f"{ERR_EXPECTED}: entity does not exist")
+        return entity
 
     def _source(self, source_id: int) -> SourceNode:
         if int(source_id) <= 0 or int(source_id) >= len(self.sources):
@@ -943,22 +945,18 @@ class SourceRoot(gl.Contract):
             raise gl.vm.UserError(f"{ERR_EXPECTED}: entity name must be passive")
         url = validate_url(canonical_url)
         now = message_timestamp()
-        entity_id = len(self.entities)
-        self.entities.append(
-            Entity(
-                gl.message.sender_address,
-                clean_name,
-                url,
-                u8(ENTITY_DRAFT),
-                u256(now),
-                u256(0),
-                u256(0),
-                u256(0),
-                gl.storage.inmem_allocate(DynArray[str]),
-                gl.storage.inmem_allocate(DynArray[str]),
-                "",
-            )
-        )
+        entity_id = self.next_entity_id
+        self.next_entity_id = self.next_entity_id + u256(1)
+        entity = self.entities.get_or_insert_default(entity_id)
+        entity.creator = gl.message.sender_address
+        entity.name = clean_name
+        entity.canonical_url = url
+        entity.status = u8(ENTITY_DRAFT)
+        entity.created_at = u256(now)
+        entity.sealed_at = u256(0)
+        entity.activated_at = u256(0)
+        entity.root_source_id = u256(0)
+        entity.definition_hash = ""
         EntityCreated(
             entity_id,
             gl.message.sender_address,
@@ -1372,11 +1370,13 @@ class SourceRoot(gl.Contract):
         expected_entity_hash: str,
         expected_certificate_hash: str,
     ) -> bool:
-        if int(entity_id) <= 0 or int(entity_id) >= len(self.entities):
+        if int(entity_id) <= 0:
             return False
         if int(source_id) <= 0 or int(source_id) >= len(self.sources):
             return False
-        entity = self.entities[int(entity_id)]
+        entity = self.entities.get(u256(entity_id))
+        if entity is None:
+            return False
         source = self.sources[int(source_id)]
         if int(entity.status) != ENTITY_ACTIVE:
             return False
