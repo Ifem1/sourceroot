@@ -31,7 +31,11 @@ def main():
 
     require("class SourceRoot(gl.Contract)" in contract, "canonical contract class is SourceRoot")
     require("class ISourceRoot" in contract, "typed cross-contract interface is present")
-    require("run_nondet_unsafe" in contract, "custom leader/validator consensus is present")
+    require(
+        "run_nondet(leader_fn, validator_fn)" in contract
+        and "def validator_fn" in contract,
+        "custom leader/validator consensus is present",
+    )
     require("inspect_authority_once" in contract, "validators independently refetch authority evidence")
     require("child scope expands parent authority" in contract, "scope attenuation is deterministically enforced")
     require("lineage_hash" in contract, "authority lineage is commitment-pinned")

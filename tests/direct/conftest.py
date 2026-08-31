@@ -5,18 +5,15 @@ import tempfile
 import pytest
 
 
-def _patch_windows_message_injection():
-    """Work around gltest 0.29.2 unlinking an open stdin handle on Windows.
+def _patch_message_injection():
+    """Provide v0.3-compatible message injection for gltest 0.29.2.
 
-    ``gltest`` replaces fd 0 with a temporary file and immediately unlinks the
-    path. POSIX permits that, but Windows rejects it while fd 0 is still open.
-    Keep the file name on Windows; the OS cleans these short-lived test files
-    when the process exits. The injected calldata and VM semantics are
-    unchanged.
+    The pinned suite's compatibility loader can fail to resolve the v0.3 SDK
+    modules before injecting stdin. GenVM decodes fd 0 at import time, so use
+    the v0.3 module paths directly and install the message before loading the
+    contract. Keep the file name on Windows because the OS rejects unlinking
+    an open stdin handle; POSIX removes it immediately as usual.
     """
-    if os.name != "nt":
-        return
-
     try:
         from gltest.direct import loader
         from gltest.direct import sdk_compat
@@ -172,7 +169,7 @@ def _patch_windows_message_injection():
     loader._inject_message_to_fd0 = inject_message_to_fd0
 
 
-_patch_windows_message_injection()
+_patch_message_injection()
 
 
 @pytest.fixture(autouse=True)

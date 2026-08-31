@@ -22,14 +22,14 @@ def test_consumer_parses():
 
 def test_custom_consensus_present():
     text = source()
-    assert "run_nondet_unsafe" in text
+    assert "run_nondet(leader_fn, validator_fn)" in text
     assert "validator_fn" in text
     assert "inspect_authority_once" in text
 
 
 def test_validator_independently_refetches():
     text = source()
-    validator = text.split("def validator_fn(leader_result)", 1)[1].split("return gl.vm.run_nondet_unsafe", 1)[0]
+    validator = text.split("def validator_fn(leader_result)", 1)[1].split("return gl.vm.run_nondet", 1)[0]
     assert "inspect_authority_once" in validator
     assert "include_source" not in validator or "True" in validator
 
