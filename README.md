@@ -123,7 +123,7 @@ Because descendant authority is evaluated through the complete parent chain, rev
 
 ## Consensus model
 
-SourceRoot uses `gl.vm.run_nondet_unsafe` with a custom validator.
+SourceRoot uses `gl.vm.run_nondet` with a custom validator.
 
 The leader:
 

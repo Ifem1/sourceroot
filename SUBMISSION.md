@@ -31,7 +31,7 @@ Consensus is used only for the genuinely semantic question: whether public ancho
 
 ## Consensus design
 
-SourceRoot uses `gl.vm.run_nondet_unsafe`.
+SourceRoot uses `gl.vm.run_nondet`.
 
 Leader and validators independently:
 

@@ -601,8 +601,10 @@ def inspect_authority_once(
 
 def _evidence_has_scope_definition(evidence: str, definition: dict) -> bool:
     lowered = evidence.lower().replace("_", " ")
-    name_tokens = [token for token in str(definition.get("name", "")).lower().replace("_", " ").split() if len(token) >= 4]
-    description_tokens = [token for token in str(definition.get("description", "")).lower().split() if len(token) >= 6]
+    name_tokens = [token for token in str(definition.get("name", "")).lower().replace("_", " ").split() if len(token) >= 3]
+    description_tokens = [token for token in str(definition.get("description", "")).lower().split() if len(token) >= 3]
+    if not name_tokens or not description_tokens:
+        return False
     return any(token in lowered for token in name_tokens) and any(
         token in lowered for token in description_tokens
     )

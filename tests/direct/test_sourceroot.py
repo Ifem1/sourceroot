@@ -189,8 +189,9 @@ def test_frozen_scope_descriptions_are_consensus_semantics(direct_vm, direct_dep
     contract.add_scope(first, "STATUS", "Operational status and outage notices")
     contract.seal_entity(first)
     second = contract.create_entity("ACME", ANCHOR)
-    contract.add_scope(second, "STATUS", "Financial filing deadlines and statutory reports")
+    contract.add_scope(second, "STATUS", "Quantum railways and lunar recipes")
     contract.seal_entity(second)
+    assert contract.get_entity(second)["scope_descriptions"] == ["Quantum railways and lunar recipes"]
     assert contract.get_entity(first)["definition_hash"] != contract.get_entity(second)["definition_hash"]
 
     first_root = contract.propose_root(first, "Status authority", ROOT_URL, 1)
@@ -201,11 +202,37 @@ def test_frozen_scope_descriptions_are_consensus_semantics(direct_vm, direct_dep
     assert direct_vm.run_validator() is True
 
     second_root = contract.propose_root(second, "Status authority", ROOT_URL, 1)
+    direct_vm._captured_validators.clear()
     direct_vm.clear_mocks()
     mock_pair(direct_vm, ANCHOR, ANCHOR_TEXT, ROOT_URL, ROOT_TEXT, "CONFIRMED", ROOT_EVIDENCE)
     direct_vm.warp(T2)
     contract.resolve_source(second_root)
-    assert direct_vm.run_validator() is False
+    leader_result, _, validator_fn = direct_vm._captured_validators[-1]
+    assert validator_fn(leader_result) is False
+
+
+def test_short_scope_tokens_remain_live_in_materiality_validation(direct_vm, direct_deploy):
+    direct_vm.warp(BASE)
+    contract = direct_deploy(CONTRACT)
+    entity_id = contract.create_entity("OPS", ANCHOR)
+    contract.add_scope(entity_id, "OPS", "KYC")
+    contract.seal_entity(entity_id)
+    root_id = contract.propose_root(entity_id, "OPS authority", ROOT_URL, 1)
+    evidence = "The official OPS source is https://status.example.com/status for KYC."
+    direct_vm.clear_mocks()
+    mock_pair(
+        direct_vm,
+        ANCHOR,
+        "OPS Authority Directory. " + evidence,
+        ROOT_URL,
+        ROOT_TEXT,
+        "CONFIRMED",
+        evidence,
+    )
+    direct_vm.warp(T1)
+    contract.resolve_source(root_id)
+    assert direct_vm.run_validator() is True
+    assert contract.get_source(root_id)["status_name"] == "ACTIVE"
 
 
 def test_ambiguous_root_remains_pending_and_can_retry(direct_vm, direct_deploy):
@@ -229,12 +256,20 @@ def test_ambiguous_root_remains_pending_and_can_retry(direct_vm, direct_deploy):
 def test_rejected_root_is_terminal(direct_vm, direct_deploy):
     contract, entity_id = setup_entity(direct_vm, direct_deploy)
     root_id = contract.propose_root(entity_id, "Fake status", ROOT_URL, ALL)
-    bad_anchor = "ACME warns that https://status.example.com/status is not an official ACME source."
-    evidence = "https://status.example.com/status is not an official ACME source."
+    bad_anchor = (
+        "ACME warns that https://status.example.com/status is not an official ACME source "
+        "for operational status and outage notices, security advisories and incident disclosures, "
+        "and legal notices and formal policy notices."
+    )
+    evidence = (
+        "https://status.example.com/status is not an official ACME source for operational status and outage notices, "
+        "security advisories and incident disclosures, and legal notices and formal policy notices."
+    )
     direct_vm.clear_mocks()
     mock_pair(direct_vm, ANCHOR, bad_anchor, ROOT_URL, ROOT_TEXT, "REJECTED", evidence)
     direct_vm.warp(T1)
     contract.resolve_source(root_id)
+    assert direct_vm.run_validator() is True
     assert contract.get_source(root_id)["status_name"] == "REJECTED"
     with direct_vm.expect_revert("source is not pending"):
         contract.resolve_source(root_id)
@@ -244,12 +279,19 @@ def test_rejected_root_is_terminal(direct_vm, direct_deploy):
 def test_rejected_root_can_be_replaced_with_a_new_candidate(direct_vm, direct_deploy):
     contract, entity_id = setup_entity(direct_vm, direct_deploy)
     root_id = contract.propose_root(entity_id, "Bad root", ROOT_URL, ALL)
-    bad_anchor = "ACME states that https://status.example.com/status is not an official source."
-    evidence = "https://status.example.com/status is not an official source."
+    bad_anchor = (
+        "ACME states that https://status.example.com/status is not an official source for operational status and "
+        "outage notices, security advisories and incident disclosures, and legal notices and formal policy notices."
+    )
+    evidence = (
+        "https://status.example.com/status is not an official source for operational status and outage notices, "
+        "security advisories and incident disclosures, and legal notices and formal policy notices."
+    )
     direct_vm.clear_mocks()
     mock_pair(direct_vm, ANCHOR, bad_anchor, ROOT_URL, ROOT_TEXT, "REJECTED", evidence)
     direct_vm.warp(T1)
     contract.resolve_source(root_id)
+    assert direct_vm.run_validator() is True
 
     replacement_url = "https://new-status.example.com/status"
     replacement_id = contract.propose_root(entity_id, "Replacement root", replacement_url, ALL)
@@ -348,16 +390,19 @@ def test_explicit_revocation_is_terminal_and_invalidates_descendants(direct_vm, 
 
     revoked_anchor = (
         "ACME Authority Directory. Authority for https://status.example.com/status is explicitly revoked "
-        "for service status, security notices, and legal notices effective now."
+        "for official operational status and outage notices, security advisories and incident disclosures, "
+        "and legal notices and formal policy notices effective now."
     )
     evidence = (
-        "Authority for https://status.example.com/status is explicitly revoked for service status, "
-        "security notices, and legal notices effective now."
+        "Authority for https://status.example.com/status is explicitly revoked for official operational status "
+        "and outage notices, security advisories and incident disclosures, and legal notices and formal policy "
+        "notices effective now."
     )
     direct_vm.clear_mocks()
     mock_pair(direct_vm, ANCHOR, revoked_anchor, ROOT_URL, ROOT_TEXT, "REVOKED", evidence)
     direct_vm.warp(T3)
     contract.revalidate_source(root_id)
+    assert direct_vm.run_validator() is True
     assert contract.get_source(root_id)["status_name"] == "REVOKED"
     assert contract.is_authoritative(entity_id, child_id, SECURITY, entity_hash, "") is False
     with direct_vm.expect_revert("source is not active"):
@@ -368,16 +413,19 @@ def test_explicit_supersession_is_terminal(direct_vm, direct_deploy):
     contract, _, root_id, _ = activate_root(direct_vm, direct_deploy)
     superseded_anchor = (
         "ACME Authority Directory. https://status.example.com/status has been superseded by the new ACME status "
-        "registry for service status, security notices, and legal notices."
+        "registry for official operational status and outage notices, security advisories and incident disclosures, "
+        "and legal notices and formal policy notices."
     )
     evidence = (
-        "https://status.example.com/status has been superseded by the new ACME status registry for service status, "
-        "security notices, and legal notices."
+        "https://status.example.com/status has been superseded by the new ACME status registry for official "
+        "operational status and outage notices, security advisories and incident disclosures, and legal notices and "
+        "formal policy notices."
     )
     direct_vm.clear_mocks()
     mock_pair(direct_vm, ANCHOR, superseded_anchor, ROOT_URL, ROOT_TEXT, "SUPERSEDED", evidence)
     direct_vm.warp(T2)
     contract.revalidate_source(root_id)
+    assert direct_vm.run_validator() is True
     assert contract.get_source(root_id)["status_name"] == "SUPERSEDED"
     assert contract.authority_certificate(root_id) == ""
 
@@ -390,16 +438,19 @@ def test_terminal_root_can_be_replaced_without_reviving_old_lineage(direct_vm, d
 
     superseded_anchor = (
         "ACME Authority Directory. https://status.example.com/status has been superseded by the new ACME status "
-        "registry for service status, security notices, and legal notices."
+        "registry for official operational status and outage notices, security advisories and incident disclosures, "
+        "and legal notices and formal policy notices."
     )
     superseded_evidence = (
-        "https://status.example.com/status has been superseded by the new ACME status registry for service status, "
-        "security notices, and legal notices."
+        "https://status.example.com/status has been superseded by the new ACME status registry for official "
+        "operational status and outage notices, security advisories and incident disclosures, and legal notices and "
+        "formal policy notices."
     )
     direct_vm.clear_mocks()
     mock_pair(direct_vm, ANCHOR, superseded_anchor, ROOT_URL, ROOT_TEXT, "SUPERSEDED", superseded_evidence)
     direct_vm.warp(T3)
     contract.revalidate_source(root_a)
+    assert direct_vm.run_validator() is True
     assert contract.get_entity(entity_id)["status_name"] == "SEALED"
     assert contract.is_authoritative(entity_id, root_a, STATUS, entity_hash, old_certificate) is False
     assert contract.is_authoritative(entity_id, child_a, SECURITY, entity_hash, "") is False
